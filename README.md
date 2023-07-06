@@ -23,7 +23,7 @@ The Money Transfer System is a Java-based application that allows users to trans
 
 To run the Money Transfer System on your local machine, follow these steps:
 
-* Clone the repository: git clone https://SekharGhosh@bitbucket.org/sekharws/money_transfer.git
+* Clone the repository: git clone https://github.com/sekharghosh1/MyRepo
 * Build the application: ./gradlew build
 * Run the application : ./gradlew bootRun
 
