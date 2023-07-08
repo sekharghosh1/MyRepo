@@ -30,9 +30,6 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class AccountsController {
 
-    private Map<String, Account> accounts = new ConcurrentHashMap<>();
-    private Map<Account, Lock> accountLocks = new ConcurrentHashMap<>();
-
     private final AccountsService accountsService;
 
     @Autowired
@@ -63,45 +60,33 @@ public class AccountsController {
     public ResponseEntity<String> transferMoney(
             @PathVariable String sourceAccountId,
             @PathVariable String targetAccountId,
-            @RequestParam double amount
-    ){
-        Account sourceAccount=null;
-        Account targetAccount =null;
+            @RequestParam BigDecimal amount
+    ) {
+        Account sourceAccount = null;
+        Account targetAccount = null;
 
-
-         if(ValidateInput.isValidInput(sourceAccountId,targetAccountId,amount)){
-             sourceAccount = accountsService.getAccount(sourceAccountId);
-             targetAccount = accountsService.getAccount(targetAccountId);
-         }else{
-             return new ResponseEntity<String>("Please check AccNumber or amount to be transfered!!",HttpStatus.BAD_REQUEST);
-         }
+        if (ValidateInput.isValidInput(sourceAccountId, targetAccountId, amount)) {
+            sourceAccount = accountsService.getAccount(sourceAccountId);
+            targetAccount = accountsService.getAccount(targetAccountId);
+        } else {
+            return new ResponseEntity<String>("Please check AccNumber or amount to be transfered!!", HttpStatus.BAD_REQUEST);
+        }
 
         if (sourceAccount == null || targetAccount == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Invalid account number");
         }
 
-        if(sourceAccountId.equals(targetAccountId) || sourceAccountId.equalsIgnoreCase(targetAccountId)){
-            return new ResponseEntity<>("Transfer not possible between same account",HttpStatus.NOT_ACCEPTABLE);
+        if (sourceAccountId.equals(targetAccountId) || sourceAccountId.equalsIgnoreCase(targetAccountId)) {
+            return new ResponseEntity<>("Transfer not possible between same account", HttpStatus.NOT_ACCEPTABLE);
         }
 
-        Lock sourceLock = accountLocks.computeIfAbsent(sourceAccount, k -> new ReentrantLock());
-        Lock targetLock = accountLocks.computeIfAbsent(targetAccount, k -> new ReentrantLock());
+            boolean isTransfer = accountsService.transferMoney(sourceAccount, targetAccount, amount);
 
-        sourceLock.lock();
-        targetLock.lock();
 
-        try{
-            if (sourceAccount.getBalance().doubleValue() < amount) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Insufficient Balance");
-            }
-            accountsService.transferMoney(sourceAccount,targetAccount,amount);
-        }catch (Exception ex){
-            ex.printStackTrace();
-        }finally {
-            targetLock.unlock();
-            sourceLock.unlock();
+        if (isTransfer) {
+            return ResponseEntity.status(HttpStatus.OK).body("Money transferred successfully");
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Insufficient Balance");
         }
-        return new ResponseEntity<String>("Money transferred successfully",HttpStatus.OK);
     }
-
 }

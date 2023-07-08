@@ -4,6 +4,7 @@ import com.dws.challenge.domain.Account;
 import com.dws.challenge.service.AccountsService;
 import com.dws.challenge.web.AccountsController;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -16,7 +17,9 @@ import java.math.BigDecimal;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Lock;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -164,8 +167,9 @@ public class ControllerTransferTest {
     }
 
     /*
-    * Test Case: Transfer Money - Success
-    Description: Test the successful transfer of money between two accounts.
+    * Test Case: Transfer Money - Success - multi Threaded Environment
+    Description: Test the successful transfer of money between two accounts with multiple Threads.
+    *
     * */
 
     @Test
@@ -173,40 +177,7 @@ public class ControllerTransferTest {
 
         String sourceAccountId = "sourceAccount";
         String targetAccountId = "targetAccount";
-        double amount = 100.0;
-
-        Account sourceAccount = new Account(sourceAccountId, new BigDecimal(10000.0));
-        Account targetAccount = new Account(targetAccountId, new BigDecimal(5000.0));
-
-        when(accountsService.getAccount(sourceAccountId)).thenReturn(sourceAccount);
-        when(accountsService.getAccount(targetAccountId)).thenReturn(targetAccount);
-
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/v1/accounts/{sourceAccountId}/transfer/{targetAccountId}", sourceAccountId, targetAccountId)
-                        .param("sourceAccountId", sourceAccountId)
-                        .param("targetAccountId", targetAccountId)
-                        .param("amount", String.valueOf(amount))
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk());
-
-
-        verify(accountsService, times(1)).getAccount(sourceAccountId);
-        verify(accountsService, times(1)).getAccount(targetAccountId);
-        verify(accountsService, times(1)).transferMoney(sourceAccount, targetAccount, amount);
-    }
-
-    /*
-    * Test Case: Transfer Money - Success - multi Threaded Environment
-    Description: Test the successful transfer of money between two accounts with multiple Threads.
-    *
-    * */
-
-    @Test
-    void transferMoney_success_multipleThreads() throws Exception {
-
-        String sourceAccountId = "sourceAccount";
-        String targetAccountId = "targetAccount";
-        double amount = 100.0;
+        BigDecimal amount = new BigDecimal(100.0);
 
         Account sourceAccount = new Account(sourceAccountId, new BigDecimal(10000.0));
         Account targetAccount = new Account(targetAccountId, new BigDecimal(5000.0));
@@ -252,7 +223,7 @@ public class ControllerTransferTest {
 
         String sourceAccountId = "sourceAccount";
         String targetAccountId = "targetAccount";
-        double amount = 100.0;
+        BigDecimal amount = new BigDecimal(100.0);
         int numThreads = 10;
 
         Account sourceAccount = new Account(sourceAccountId, new BigDecimal(10000.0));

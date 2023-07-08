@@ -11,10 +11,16 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class AccountsService {
+
+    private Map<Account, LockWrapper> accountLocks = new ConcurrentHashMap<>();
 
     @Getter
     private final AccountsRepository accountsRepository;
@@ -33,40 +39,72 @@ public class AccountsService {
     }
 
 
-    public void transferMoney(Account sourceAccount, Account targetAccount, double amount) {
+    public boolean transferMoney(Account sourceAccount, Account targetAccount, BigDecimal amount) {
 
-        UUID randomUUID = UUID.randomUUID();
-        String uuidString = randomUUID.toString();
+        LockWrapper sourceLock = accountLocks.computeIfAbsent(sourceAccount, k -> new ReentrantLockWrapper());
+        LockWrapper targetLock = accountLocks.computeIfAbsent(targetAccount, k -> new ReentrantLockWrapper());
 
-        LocalDateTime currentDateTime = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String formattedDateTime = currentDateTime.format(formatter);
-
-        Transaction transaction =  Transaction.builder()
-                .transactionId(uuidString)
-                .transactionDatetime(formattedDateTime)
-                .sourceAccount(sourceAccount)
-                .targetAccount(targetAccount)
-                .amount(BigDecimal.valueOf(amount))
-                .build();
+        boolean isSourceLockAcquired = false;
+        boolean isTargetLockAcquired = false;
 
         try{
-            sourceAccount.setBalance(sourceAccount.getBalance().subtract(BigDecimal.valueOf(amount)));
-            targetAccount.setBalance(targetAccount.getBalance().add(BigDecimal.valueOf(amount)));
+            isSourceLockAcquired = sourceLock.tryLock();
+            isTargetLockAcquired = targetLock.tryLock();
 
-            NotificationService notificationService = new EmailNotificationService();
-            notificationService.notifyAboutTransfer(sourceAccount,"Your account has been sucessfully debited with "+transaction.getAmount()
-                    +"on "+transaction.getTransactionDatetime()
-                    +"TransactionID "+transaction.getTransactionId()
-                    +"Available Balance :"+sourceAccount.getBalance());
+            if(isSourceLockAcquired && isTargetLockAcquired){
+                if (sourceAccount.getBalance().compareTo(amount) >= 0) {
 
-            notificationService.notifyAboutTransfer(targetAccount,"Your account has been sucessfully credited with "+transaction.getAmount()
-                    +"on "+transaction.getTransactionDatetime()
-                    +"TransactionID "+transaction.getTransactionId()
-                    +"Available Balance :"+targetAccount.getBalance());
+                    UUID randomUUID = UUID.randomUUID();
+                    String uuidString = randomUUID.toString();
 
-        }catch (Exception ex){
+                    LocalDateTime currentDateTime = LocalDateTime.now();
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                    String formattedDateTime = currentDateTime.format(formatter);
+
+                    Transaction transaction =  Transaction.builder()
+                            .transactionId(uuidString)
+                            .transactionDatetime(formattedDateTime)
+                            .sourceAccount(sourceAccount)
+                            .targetAccount(targetAccount)
+                            .amount(amount)
+                            .build();
+
+                    sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount));
+                    targetAccount.setBalance(targetAccount.getBalance().add(amount));
+
+                    NotificationService notificationService = new EmailNotificationService();
+                    notificationService.notifyAboutTransfer(sourceAccount,"Your account has been sucessfully debited with "+transaction.getAmount()
+                            +" on "+transaction.getTransactionDatetime()
+                            +" TransactionID "+transaction.getTransactionId()
+                            +" Available Balance :"+sourceAccount.getBalance());
+
+                    notificationService.notifyAboutTransfer(targetAccount,"Your account has been sucessfully credited with "+transaction.getAmount()
+                            +" on "+transaction.getTransactionDatetime()
+                            +" TransactionID "+transaction.getTransactionId()
+                            +" Available Balance :"+targetAccount.getBalance());
+
+                    return true;
+                }
+                    return false;
+
+            }else{
+                return  false;
+            }
+        }
+        catch (Exception ex){
             throw new TransactionFailedException("Transaction failed!!",ex);
         }
+        finally {
+            if(isSourceLockAcquired){
+                sourceLock.unlock();
+            }
+            if(isTargetLockAcquired){
+                targetLock.unlock();
+            }
+        }
+
+    }
+    public void setLock(Account account, LockWrapper lock) {
+        accountLocks.put(account, lock);
     }
 }
